@@ -1,26 +1,38 @@
 import jwt from "jsonwebtoken";
+import bcrypt from "bcrypt";
+import { getUserByEmail } from "../models/user.model.js"; // Asume que ya creaste este modelo
 
-const default_user = {
-  id: 1,
-  email: "user@email.com",
-  password: "strongPass123",
-};
+export const login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
 
-export const login = (req, res) => {
-  const { email, password } = req.body;
+    // Validación básica
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email y contraseña son obligatorios" });
+    }
 
-  const user = { id: 1 };
+    // Buscar usuario en Firestore
+    const user = await getUserByEmail(email);
+    if (!user) {
+      return res.status(401).json({ error: "Credenciales inválidas" }); // Mensaje genérico por seguridad
+    }
 
-  if (email == default_user.email && password == default_user.password) {
-    const payload = { id: user.id };
-    const expiration = { expiresIn: "1h" };
+    // Comparar contraseña hasheada
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ error: "Credenciales inválidas" });
+    }
 
-    const token = jwt.sign(payload, process.env.JWT_SECRET, expiration);
+    // Generar token (sin incluir datos sensibles)
+    const token = jwt.sign(
+      { id: user.id, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" }
+    );
 
     res.json({ token });
-  } else {
-    return res.sendStatus(401);
+  } catch (error) {
+    console.error("Error en login:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
   }
-
-
-};
+}
